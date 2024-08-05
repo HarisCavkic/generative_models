@@ -14,22 +14,26 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 class ModelMonitor(Callback):
-    def __init__(self, num_img=3, latent_dim=128):
+    def __init__(self, save_path = None, num_img=3, latent_dim=128):
         self.num_img = num_img
         self.latent_dim = latent_dim
 
+        if save_path is None:
+            self.save_dir = Path().resolve().parent / "examples/generated_images"
+            self.save_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.save_dir = save_path
     def on_epoch_end(self, epoch, logs=None):
         random_latent_vectors = tf.random.uniform((self.num_img, self.latent_dim,1))
         generated_images = self.model.generator(random_latent_vectors)
         generated_images *= 255
         generated_images.numpy()
 
-        save_dir = Path(__file__).parent / "examples/generated_images"
-        save_dir.mkdir(parents=True, exist_ok=True)
-        print("ModelMonitor: Saving image to ", save_dir)
+
+        print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
-            img.save(str(save_dir / f'generated_img_{epoch}_{i}.png'))
+            img.save(str(self.save_dir / f'generated_img_{epoch}_{i}.png'))
 
 class VanillaGAN(Model):
     def __init__(self, generator=None, discriminator=None, *args, **kwargs):
