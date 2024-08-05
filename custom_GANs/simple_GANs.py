@@ -35,6 +35,31 @@ class ModelMonitor(Callback):
             img = array_to_img(generated_images[i])
             img.save(str(self.save_dir / f'generated_img_{epoch}_{i}.png'))
 
+class CheckpointCleanupCallback(Callback):
+    def __init__(self, checkpoint_dir, max_to_keep=1):
+        super().__init__()
+        self.checkpoint_dir = checkpoint_dir
+        self.max_to_keep = max_to_keep
+
+    def on_epoch_end(self, epoch, logs=None):
+        # After each epoch, remove old checkpoints
+        self.remove_old_checkpoints(self.checkpoint_dir, self.max_to_keep)
+
+    def remove_old_checkpoints(self, checkpoint_dir, max_to_keep=1):
+        """Remove older checkpoints if there are more than max_to_keep."""
+        # List all checkpoint files
+        checkpoint_files = os.listdir(checkpoint_dir)
+
+        # Sort the files to ensure chronological order
+        checkpoint_files.sort()
+
+        # If there are more checkpoints than max_to_keep, delete the oldest
+        while len(checkpoint_files) > max_to_keep:
+            # Remove the oldest file
+            oldest_checkpoint = checkpoint_files.pop(0)
+            os.remove(os.path.join(checkpoint_dir, oldest_checkpoint))
+            print(f"Deleted old checkpoint: {oldest_checkpoint}")
+
 class VanillaGAN(Model):
     def __init__(self, generator=None, discriminator=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
