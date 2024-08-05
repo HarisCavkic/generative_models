@@ -163,3 +163,4 @@ cython_debug/
 
 .idea
 *.pyc
+examples/nosync.ipynb
