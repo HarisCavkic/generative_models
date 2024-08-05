@@ -26,7 +26,7 @@ class ModelMonitor(Callback):
 
         save_dir = Path(__file__).parent / "examples/generated_images"
         save_dir.mkdir(parents=True, exist_ok=True)
-
+        print("ModelMonitor: Saving image to ", save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
             img.save(str(save_dir / f'generated_img_{epoch}_{i}.png'))
