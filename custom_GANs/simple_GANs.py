@@ -54,12 +54,16 @@ class CheckpointCleanupCallback(Callback):
         checkpoint_files.sort()
 
         # If there are more checkpoints than max_to_keep, delete the oldest
-        while len(checkpoint_files) > max_to_keep:
-            # Remove the oldest file
-            oldest_checkpoint = checkpoint_files.pop(0)
-            os.remove(os.path.join(checkpoint_dir, oldest_checkpoint))
-            print(f"Deleted old checkpoint: {oldest_checkpoint}")
-
+        while len(checkpoint_files) > max_to_keep+1:
+          oldest_checkpoint = checkpoint_files.pop(0)
+          full_path = os.path.join(checkpoint_dir, oldest_checkpoint)
+          
+          if os.path.isfile(full_path):
+              os.remove(full_path)
+              print(f"Deleted old checkpoint: {oldest_checkpoint}")
+          else:
+              print(f"Skipped directory: {oldest_checkpoint}")
+            
 class VanillaGAN(Model):
     def __init__(self, generator=None, discriminator=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
