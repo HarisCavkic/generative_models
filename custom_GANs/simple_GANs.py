@@ -1,5 +1,8 @@
 import os
 from pathlib import Path
+import re
+import glob
+from typing import Tuple
 
 import tensorflow as tf
 from keras import Sequential
@@ -13,8 +16,9 @@ from tensorflow.keras.optimizers import Adam
 from matplotlib import pyplot as plt
 import numpy as np
 
+
 class ModelMonitor(Callback):
-    def __init__(self, save_path = None, num_img=3, latent_dim=128):
+    def __init__(self, save_path=None, num_img=3, latent_dim=128):
         self.num_img = num_img
         self.latent_dim = latent_dim
 
@@ -23,17 +27,18 @@ class ModelMonitor(Callback):
             self.save_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.save_dir = save_path
+
     def on_epoch_end(self, epoch, logs=None):
-        random_latent_vectors = tf.random.uniform((self.num_img, self.latent_dim,1))
+        random_latent_vectors = tf.random.uniform((self.num_img, self.latent_dim, 1))
         generated_images = self.model.generator(random_latent_vectors)
         generated_images *= 255
         generated_images.numpy()
-
 
         print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
             img.save(str(self.save_dir / f'generated_img_{epoch}_{i}.png'))
+
 
 class CheckpointCleanupCallback(Callback):
     def __init__(self, checkpoint_dir, max_to_keep=1):
@@ -54,22 +59,131 @@ class CheckpointCleanupCallback(Callback):
         checkpoint_files.sort()
 
         # If there are more checkpoints than max_to_keep, delete the oldest
-        while len(checkpoint_files) > max_to_keep+1:
-          oldest_checkpoint = checkpoint_files.pop(0)
-          full_path = os.path.join(checkpoint_dir, oldest_checkpoint)
-          
-          if os.path.isfile(full_path):
-              os.remove(full_path)
-              print(f"Deleted old checkpoint: {oldest_checkpoint}")
-          else:
-              print(f"Skipped directory: {oldest_checkpoint}")
-            
+        while len(checkpoint_files) > max_to_keep + 1:
+            oldest_checkpoint = checkpoint_files.pop(0)
+            full_path = os.path.join(checkpoint_dir, oldest_checkpoint)
+
+            if os.path.isfile(full_path):
+                os.remove(full_path)
+                print(f"Deleted old checkpoint: {oldest_checkpoint}")
+            else:
+                print(f"Skipped directory: {oldest_checkpoint}")
+
+
+class GANCheckpoint(tf.keras.callbacks.Callback):
+    def __init__(self, checkpoint_dir, monitor='disc_loss', save_best_only=True, mode='min', verbose=1):
+        super(GANCheckpoint, self).__init__()
+        self.checkpoint_dir = checkpoint_dir
+        self.monitor = monitor
+        self.save_best_only = save_best_only
+        self.mode = mode
+        self.verbose = verbose
+        self.best = float('inf') if mode == 'min' else float('-inf')
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        current = logs.get(self.monitor)
+
+        if current is None:
+            return
+
+        if (self.mode == 'min' and current < self.best) or (
+                self.mode == 'max' and current > self.best) or not self.save_best_only:
+            if self.verbose > 0:
+                print(
+                    f'\nEpoch {epoch + 1}: {self.monitor} improved from {self.best:.4f} to {current:.4f}, saving model')
+            self.best = current
+
+            # Save generator
+            generator_path = os.path.join(self.checkpoint_dir,
+                                          f'generator_epoch_{epoch + 1:02d}_{self.monitor}_{current:.2f}.keras')
+            self.model.generator.save(generator_path)
+
+            # Save discriminator
+            discriminator_path = os.path.join(self.checkpoint_dir,
+                                              f'discriminator_epoch_{epoch + 1:02d}_{self.monitor}_{current:.2f}.keras')
+            self.model.discriminator.save(discriminator_path)
+
+class Generator(Model):
+    def __init__(self, input_dim: int, output_shape: Tuple[int, int, int]):
+        super(Generator, self).__init__()
+        self.model = self.build_generator(input_dim, output_shape)
+
+    def build_generator(self, input_dim: int, output_shape: Tuple[int, int, int]):
+        model = Sequential()
+
+        model.add(Dense(7 * 7 * 128, input_dim=input_dim))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Reshape((7, 7, 128)))
+
+        model.add(UpSampling2D())
+        model.add(Conv2D(128, kernel_size=5, padding='same'))
+        model.add(LeakyReLU(alpha=0.2))
+
+        model.add(UpSampling2D())
+        model.add(Conv2D(128, kernel_size=5, padding='same'))
+        model.add(LeakyReLU(alpha=0.2))
+
+        model.add(Conv2D(128, 4, padding='same'))
+        model.add(LeakyReLU(0.2))
+
+        model.add(Conv2D(128, 4, padding='same'))
+        model.add(LeakyReLU(0.2))
+
+        model.add(Conv2D(output_shape[-1], 4, padding='same', activation='tanh'))
+
+        return model
+
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
+        return self.model(inputs)
+
+
+class Discriminator(tf.keras.Model):
+    def __init__(self, input_shape: Tuple[int, int, int]):
+        super(Discriminator, self).__init__()
+        self.model = self.build_discriminator()
+    def build_discriminator(self, input_shape: Tuple[int, int, int]):
+        model = Sequential()
+
+        # First Conv Block
+        model.add(Conv2D(32, 5, input_shape=input_shape))
+        model.add(LeakyReLU(0.2))
+        model.add(Dropout(0.4))
+
+        # Second Conv Block
+        model.add(Conv2D(64, 5))
+        model.add(LeakyReLU(0.2))
+        model.add(Dropout(0.4))
+
+        # Third Conv Block
+        model.add(Conv2D(128, 5))
+        model.add(LeakyReLU(0.2))
+        model.add(Dropout(0.4))
+
+        # Fourth Conv Block
+        model.add(Conv2D(256, 5))
+        model.add(LeakyReLU(0.2))
+        model.add(Dropout(0.4))
+
+        # Flatten then pass to dense layer
+        model.add(Flatten())
+        model.add(Dropout(0.4))
+        model.add(Dense(1, activation='sigmoid'))
+
+        return model
+
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
+        return self.model(inputs)
+
 class VanillaGAN(Model):
-    def __init__(self, generator=None, discriminator=None, *args, **kwargs):
+    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Create attributes for gen and disc
-        self.generator = generator if generator is not None else self.build_generator()
-        self.discriminator = discriminator if discriminator is not None else self.build_discriminator()
+        assert all(opt is not None for opt in (latent_dim, output_dim))
+        self.latent_dim = latent_dim
+        self.output_dim = output_dim
+        self.generator = Generator(latent_dim, output_dim) if generator is None else generator
+        self.discriminator = Discriminator(output_dim) if discriminator is None else discriminator
 
     def compile(self, g_opt=None, d_opt=None, g_loss=None, d_loss=None, use_default=True, *args, **kwargs):
         super().compile(*args, **kwargs)
@@ -85,7 +199,6 @@ class VanillaGAN(Model):
             self.d_opt = d_opt
             self.g_loss = g_loss
             self.d_loss = d_loss
-
 
     def train_step(self, batch):
         real_images = batch
@@ -121,57 +234,23 @@ class VanillaGAN(Model):
 
         return {'d_loss': total_d_loss, 'g_loss': total_g_loss}
 
-    def build_generator(self):
-        model = Sequential()
+    def load_latest_checkpoint(self, checkpoint_dir):
+        checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'vanilla_gan_epoch_*.keras'))
 
-        model.add(Dense(7 * 7 * 128, input_dim=128))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Reshape((7, 7, 128)))
+        if not checkpoint_files:
+            print("No checkpoints found in directory:", checkpoint_dir)
+            return False
 
-        model.add(UpSampling2D())
-        model.add(Conv2D(128, kernel_size=5, padding='same'))
-        model.add(LeakyReLU(alpha=0.2))
+        # Sort checkpoints by epoch number
+        checkpoint_files.sort(key=lambda x: int(re.search(r'epoch_(\d+)', x).group(1)))
 
-        model.add(UpSampling2D())
-        model.add(Conv2D(128, kernel_size=5, padding='same'))
-        model.add(LeakyReLU(alpha=0.2))
+        # Get the latest checkpoint file
+        latest_checkpoint = checkpoint_files[-1]
 
-        model.add(Conv2D(128, 4, padding='same'))
-        model.add(LeakyReLU(0.2))
+        # Load the model from the checkpoint
+        self.load_weights(latest_checkpoint)
 
-        model.add(Conv2D(128, 4, padding='same'))
-        model.add(LeakyReLU(0.2))
+        print(f"Loaded latest checkpoint: {latest_checkpoint}")
+        return True
 
-        model.add(Conv2D(1, 4, padding='same', activation='sigmoid'))
 
-        return model
-
-    def build_discriminator(self):
-        model = Sequential()
-
-        # First Conv Block
-        model.add(Conv2D(32, 5, input_shape=(28, 28, 1)))
-        model.add(LeakyReLU(0.2))
-        model.add(Dropout(0.4))
-
-        # Second Conv Block
-        model.add(Conv2D(64, 5))
-        model.add(LeakyReLU(0.2))
-        model.add(Dropout(0.4))
-
-        # Third Conv Block
-        model.add(Conv2D(128, 5))
-        model.add(LeakyReLU(0.2))
-        model.add(Dropout(0.4))
-
-        # Fourth Conv Block
-        model.add(Conv2D(256, 5))
-        model.add(LeakyReLU(0.2))
-        model.add(Dropout(0.4))
-
-        # Flatten then pass to dense layer
-        model.add(Flatten())
-        model.add(Dropout(0.4))
-        model.add(Dense(1, activation='sigmoid'))
-
-        return model
