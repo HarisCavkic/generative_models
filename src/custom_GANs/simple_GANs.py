@@ -112,6 +112,7 @@ class Generator(Model):
     def build_generator(self, input_dim: int, output_shape: Tuple[int, int, int]):
         model = Sequential()
 
+        # 7x7 image with 128 channels
         model.add(Dense(7 * 7 * 128, input_dim=input_dim))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Reshape((7, 7, 128)))
@@ -201,6 +202,12 @@ class VanillaGAN(Model):
             self.d_loss = d_loss
 
     def train_step(self, batch):
+        print("BATCH SIZE: ", len(batch))
+        try:
+            print("BATCH SSHAPE: ", batch.shape)
+        except:
+            pass
+
         real_images = batch
         fake_images = self.generator(tf.random.normal((128, 128, 1)), training=False)
 
@@ -253,4 +260,81 @@ class VanillaGAN(Model):
         print(f"Loaded latest checkpoint: {latest_checkpoint}")
         return True
 
+class ConditionalGAN(Model):
+    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Create attributes for gen and disc
+        assert all(opt is not None for opt in (latent_dim, output_dim))
+        self.latent_dim = latent_dim
+        self.output_dim = output_dim
+        self.generator = Generator(latent_dim, output_dim) if generator is None else generator
+        self.discriminator = Discriminator(output_dim) if discriminator is None else discriminator
+
+    def compile(self, g_opt=None, d_opt=None, g_loss=None, d_loss=None, use_default=True, *args, **kwargs):
+        super().compile(*args, **kwargs)
+
+        if use_default:
+            self.g_opt = Adam(learning_rate=0.0001)
+            self.d_opt = Adam(learning_rate=0.00001)
+            self.g_loss = BinaryCrossentropy()
+            self.d_loss = BinaryCrossentropy()
+        else:
+            assert all(opt is not None for opt in (g_opt, d_opt, g_loss, d_loss))
+            self.g_opt = g_opt
+            self.d_opt = d_opt
+            self.g_loss = g_loss
+            self.d_loss = d_loss
+
+    def train_step(self, batch):
+        real_images = batch
+        fake_images = self.generator(tf.random.normal((128, 128, 1)), training=False)
+
+        # train discriminator
+        with tf.GradientTape() as d_tape:
+            yhat_real = self.discriminator(real_images, training=True)
+            yhat_fake = self.discriminator(fake_images, training=True)
+            yhat = tf.concat([yhat_real, yhat_fake], axis=0)
+
+            y = tf.concat([tf.zeros_like(yhat_real), tf.ones_like(yhat_fake)], axis=0)
+
+            noise_real = 0.15 * tf.random.uniform(tf.shape(yhat_real))
+            noise_fake = -0.15 * tf.random.uniform(tf.shape(yhat_fake))
+
+            y += tf.concat([noise_real, noise_fake], axis=0)
+
+            total_d_loss = self.d_loss(y, yhat)
+
+        # Apply backpropagation - nn learn
+        dgrad = d_tape.gradient(total_d_loss, self.discriminator.trainable_variables)
+        self.d_opt.apply_gradients(zip(dgrad, self.discriminator.trainable_variables))
+
+        with tf.GradientTape() as g_tape:
+            gen_images = self.generator(tf.random.normal((128, 128, 1)), training=True)
+            predicted_labels = self.discriminator(gen_images, training=False)
+
+            total_g_loss = self.g_loss(tf.zeros_like(predicted_labels), predicted_labels)
+
+        ggrad = g_tape.gradient(total_g_loss, self.generator.trainable_variables)
+        self.g_opt.apply_gradients(zip(ggrad, self.generator.trainable_variables))
+
+        return {'d_loss': total_d_loss, 'g_loss': total_g_loss}
+
+    def load_latest_checkpoint(self, checkpoint_dir):
+        checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'vanilla_gan_epoch_*.keras'))
+
+        if not checkpoint_files:
+            print("No checkpoints found in directory:", checkpoint_dir)
+            return False
+
+        # Sort checkpoints by epoch number
+        checkpoint_files.sort(key=lambda x: int(re.search(r'epoch_(\d+)', x).group(1)))
+
+        # Get the latest checkpoint file
+        latest_checkpoint = checkpoint_files[-1]
+
+        # Load the model from the checkpoint
+        self.load_weights(latest_checkpoint)
+
+        print(f"Loaded latest checkpoint: {latest_checkpoint}")
+        return True
 
