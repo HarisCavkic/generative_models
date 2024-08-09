@@ -141,7 +141,7 @@ class Generator(Model):
 class Discriminator(tf.keras.Model):
     def __init__(self, input_shape: Tuple[int, int, int]):
         super(Discriminator, self).__init__()
-        self.model = self.build_discriminator()
+        self.model = self.build_discriminator(input_shape)
     def build_discriminator(self, input_shape: Tuple[int, int, int]):
         model = Sequential()
 
