@@ -202,11 +202,6 @@ class VanillaGAN(Model):
             self.d_loss = d_loss
 
     def train_step(self, batch):
-        try:
-            print("BATCH SSHAPE: ", batch.shape)
-        except:
-            pass
-
         real_images = batch
         fake_images = self.generator(tf.random.normal((tf.shape(batch)[0], self.latent_dim)), training=False)
 
