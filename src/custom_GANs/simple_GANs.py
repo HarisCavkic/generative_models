@@ -208,7 +208,7 @@ class VanillaGAN(Model):
             pass
 
         real_images = batch
-        fake_images = self.generator(tf.random.normal((128, 128, 1)), training=False)
+        fake_images = self.generator(tf.random.normal((tf.shape(batch)[0], self.latent_dim)), training=False)
 
         # train discriminator
         with tf.GradientTape() as d_tape:
