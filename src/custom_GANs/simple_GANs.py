@@ -202,7 +202,6 @@ class VanillaGAN(Model):
             self.d_loss = d_loss
 
     def train_step(self, batch):
-        print("BATCH SIZE: ", len(batch))
         try:
             print("BATCH SSHAPE: ", batch.shape)
         except:
