@@ -19,10 +19,13 @@ import numpy as np
 
 
 class ModelMonitor(Callback):
-    def __init__(self, save_path=None, num_img=3, latent_dim=128):
+    def __init__(self, save_path=None, num_img=3, latent_dim=128, input_generators=None):
         self.num_img = num_img
         self.latent_dim = latent_dim
-
+        self.input_generators = input_generators if input_generators is not None else [lambda:
+                                                                                       tf.random.uniform((self.num_img,
+                                                                                                          self.latent_dim,
+                                                                                                          1))]
         if save_path is None:
             self.save_dir = Path().resolve().parent / "examples/generated_images"
             self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -30,8 +33,8 @@ class ModelMonitor(Callback):
             self.save_dir = save_path
 
     def on_epoch_end(self, epoch, logs=None):
-        random_latent_vectors = tf.random.uniform((self.num_img, self.latent_dim, 1))
-        generated_images = self.model.generator(random_latent_vectors)
+        inputs = [func() for func in self.input_generators]
+        generated_images = self.model.generator(*inputs)
         generated_images *= 255
         generated_images.numpy()
 
@@ -268,10 +271,10 @@ class ConditionalGenerator(Model):
     def _build_generator(self, input_dim: int, nr_classes: int, output_shape: Tuple[int, int, int]):
         # label part / conditional part
         in_label = Input(shape=(1,))
-        li = Embedding(nr_classes, 50)(in_label) # embedding for categorical input
+        li = Embedding(nr_classes, 50)(in_label)  # embedding for categorical input
         n_nodes = 7 * 7
         li = Dense(n_nodes)(li)
-        li = Reshape((7, 7, 1))(li)# reshape to additional channel
+        li = Reshape((7, 7, 1))(li)  # reshape to additional channel
 
         # latent vector/image gen input part
         in_lat = Input(shape=(input_dim,))
@@ -293,7 +296,7 @@ class ConditionalGenerator(Model):
                               activation=LeakyReLU(alpha=0.2))(gen)
         gen = BatchNormalization()(gen)
         # output
-        out_layer = Conv2D(output_shape[-1] , (7, 7), activation='tanh', padding='same')(gen)
+        out_layer = Conv2D(output_shape[-1], (7, 7), activation='tanh', padding='same')(gen)
         # define model
         model = Model([in_lat, in_label], out_layer)
         return model
@@ -303,12 +306,11 @@ class ConditionalGenerator(Model):
 
 
 class ConditionalDiscriminator(tf.keras.Model):
-    def __init__(self, input_shape: Tuple[int, int, int], nr_classes:int):
+    def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int):
         super(ConditionalDiscriminator, self).__init__()
         self.model = self.build_discriminator(input_shape, nr_classes)
 
     def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int):
-
         # label part
         in_label = Input(shape=(1,))
         li = Embedding(nr_classes, 50)(in_label)
@@ -323,12 +325,12 @@ class ConditionalDiscriminator(tf.keras.Model):
 
         # downsample
         fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
-                                 activation= LeakyReLU(alpha=0.2))(merge)
+                    activation=LeakyReLU(alpha=0.2))(merge)
         fe = Dropout(0.4)(fe)
 
         # downsample
         fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
-                                 activation=LeakyReLU(alpha=0.2))(fe)
+                    activation=LeakyReLU(alpha=0.2))(fe)
         fe = Dropout(0.4)(fe)
 
         fe = Flatten()(fe)
@@ -342,15 +344,18 @@ class ConditionalDiscriminator(tf.keras.Model):
     def call(self, images, labels):
         return self.model([images, labels])
 
+
 class ConditionalGAN(Model):
-    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes =None, *args, **kwargs):
+    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes=None, *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         # Create attributes for gen and disc
         assert all(opt is not None for opt in (latent_dim, output_dim, nr_classes))
         self.latent_dim = latent_dim
         self.output_dim = output_dim
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
-        self.discriminator = ConditionalDiscriminator(output_dim, nr_classes) if discriminator is None else discriminator
+        self.discriminator = ConditionalDiscriminator(output_dim,
+                                                      nr_classes) if discriminator is None else discriminator
 
     def compile(self, g_opt=None, d_opt=None, g_loss=None, d_loss=None, use_default=True, *args, **kwargs):
         super().compile(*args, **kwargs)
@@ -371,7 +376,7 @@ class ConditionalGAN(Model):
         real_images, labels = batch
         batch_size = tf.shape(real_images)[0]
 
-        #turn off training of generator. I think this is not necessary but for safety better to have
+        # turn off training of generator. I think this is not necessary but for safety better to have
         self.generator.trainable = False
         self.discriminator.trainable = True
 
@@ -411,7 +416,6 @@ class ConditionalGAN(Model):
 
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
-
 
         # Train the generator
         with tf.GradientTape() as tape:
