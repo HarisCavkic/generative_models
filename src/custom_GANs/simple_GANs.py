@@ -42,7 +42,8 @@ class ModelMonitor(Callback):
         print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
-            img.save(str(self.save_dir / f'generated_img_{epoch}_{i}.png'))
+            label = f'l{int(inputs[1][i])}' if len(inputs[i]) > 1 else ""
+            img.save(str(self.save_dir / f'generated_img_e{epoch}_{label}_{i}.png'))
 
 
 class CheckpointCleanupCallback(Callback):
@@ -55,7 +56,7 @@ class CheckpointCleanupCallback(Callback):
         # After each epoch, remove old checkpoints
         self.remove_old_checkpoints(self.checkpoint_dir, self.max_to_keep)
 
-    def remove_old_checkpoints(self, checkpoint_dir, max_to_keep=1):
+    def remove_old_checkpoints(self, checkpoint_dir, max_to_keep=2):
         """Remove older checkpoints if there are more than max_to_keep."""
         # List all checkpoint files
         checkpoint_files = os.listdir(checkpoint_dir)
@@ -76,7 +77,7 @@ class CheckpointCleanupCallback(Callback):
 
 
 class GANCheckpoint(tf.keras.callbacks.Callback):
-    def __init__(self, checkpoint_dir, monitor='disc_loss', save_best_only=True, mode='min', verbose=1):
+    def __init__(self, checkpoint_dir, monitor='g_loss', save_best_only=True, mode='min', verbose=1):
         super(GANCheckpoint, self).__init__()
         self.checkpoint_dir = checkpoint_dir
         self.monitor = monitor
