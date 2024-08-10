@@ -33,7 +33,8 @@ class ModelMonitor(Callback):
             self.save_dir = save_path
 
     def on_epoch_end(self, epoch, logs=None):
-        inputs = [func() for func in self.input_generators]
+        inputs = []
+
         generated_images = self.model.generator(*inputs)
         generated_images *= 255
         generated_images.numpy()
@@ -361,8 +362,8 @@ class ConditionalGAN(Model):
         super().compile(*args, **kwargs)
 
         if use_default:
-            self.g_opt = Adam(learning_rate=0.0004)
-            self.d_opt = Adam(learning_rate=0.0003)
+            self.g_opt = Adam(learning_rate=0.0001)
+            self.d_opt = Adam(learning_rate=0.00001)
             self.g_loss = BinaryCrossentropy()
             self.d_loss = BinaryCrossentropy()
         else:
