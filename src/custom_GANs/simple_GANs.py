@@ -33,7 +33,7 @@ class ModelMonitor(Callback):
             self.save_dir = save_path
 
     def on_epoch_end(self, epoch, logs=None):
-        inputs = []
+        inputs = [func() for func in self.input_generators]
 
         generated_images = self.model.generator(*inputs)
         generated_images *= 255
@@ -413,15 +413,15 @@ class ConditionalGAN(Model):
         self.discriminator.trainable = False
 
         # Sample random points in the latent space
-        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
-
+        random_latent_vectors = tf.random.normal(shape=(batch_size*2, self.latent_dim))
+        combined_labels = tf.concat([labels, labels], axis=0)
         # Assemble labels that say "all real images"
-        misleading_labels = tf.zeros((batch_size, 1))
+        misleading_labels = tf.zeros((batch_size*2, 1))
 
         # Train the generator
         with tf.GradientTape() as tape:
-            fake_images = self.generator(random_latent_vectors, labels)
-            predictions = self.discriminator(fake_images, labels)
+            fake_images = self.generator(random_latent_vectors, combined_labels)
+            predictions = self.discriminator(fake_images, combined_labels)
             g_loss = self.g_loss(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_opt.apply_gradients(zip(grads, self.generator.trainable_weights))
