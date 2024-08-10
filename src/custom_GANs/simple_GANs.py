@@ -325,7 +325,7 @@ class ConditionalDiscriminator(tf.keras.Model):
         merge = Concatenate()([in_image, li])
 
         # downsample
-        fe = Conv2D(64, (3, 3), strides=(2, 2), padding='same',
+        fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(merge)
         fe = Dropout(0.4)(fe)
 
