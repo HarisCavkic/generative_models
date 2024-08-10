@@ -362,8 +362,8 @@ class ConditionalGAN(Model):
         super().compile(*args, **kwargs)
 
         if use_default:
-            self.g_opt = Adam(learning_rate=0.001)
-            self.d_opt = Adam(learning_rate=0.00001)
+            self.g_opt = Adam(learning_rate=0.0002, beta_1=0.5)
+            self.d_opt = Adam(learning_rate=0.0002, beta_1=0.5)
             self.g_loss = BinaryCrossentropy()
             self.d_loss = BinaryCrossentropy()
         else:
@@ -399,7 +399,9 @@ class ConditionalGAN(Model):
         )
 
         # Add random noise to the labels - important trick!
-        labels_discriminator += 0.05 * tf.random.uniform(tf.shape(labels_discriminator))
+        noise_real = 0.15 * tf.random.uniform(tf.shape(batch_size))
+        noise_fake = -0.15 * tf.random.uniform(tf.shape(batch_size))
+        labels_discriminator += tf.concat([noise_fake, noise_real], axis=0)
 
         # Train the discriminator
         with tf.GradientTape() as tape:
