@@ -400,8 +400,8 @@ class ConditionalGAN(Model):
         )
 
         # Add random noise to the labels - important trick!
-        noise_real = 0.15 * tf.random.uniform(tf.shape(batch_size))
-        noise_fake = -0.15 * tf.random.uniform(tf.shape(batch_size))
+        noise_real = 0.15 * tf.random.uniform(shape=(batch_size, 1))
+        noise_fake = -0.15 * tf.random.uniform(shape=(batch_size, 1))
         labels_discriminator += tf.concat([noise_fake, noise_real], axis=0)
 
         # Train the discriminator
