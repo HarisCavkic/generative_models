@@ -325,7 +325,7 @@ class ConditionalDiscriminator(tf.keras.Model):
         merge = Concatenate()([in_image, li])
 
         # downsample
-        fe = Conv2D(64, (3, 3), strides=(2, 2), padding='same',
+        fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(merge)
         fe = Dropout(0.4)(fe)
 
@@ -413,7 +413,7 @@ class ConditionalGAN(Model):
         self.discriminator.trainable = False
 
         # Sample random points in the latent space
-        random_latent_vectors = tf.random.normal(shape=(batch_size*2, self.latent_dim))
+        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
