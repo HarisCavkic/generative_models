@@ -38,11 +38,11 @@ class ModelMonitor(Callback):
         generated_images = self.model.generator(*inputs)
         generated_images *= 255
         generated_images.numpy()
-
+ 
         print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
-            label = f'l{int(inputs[1][i])}' if len(inputs[i]) > 1 else ""
+            label = f'l{int(inputs[1][i])}' if len(inputs[1]) > 1 else ""
             img.save(str(self.save_dir / f'generated_img_e{epoch}_{label}_{i}.png'))
 
 
