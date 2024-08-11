@@ -363,8 +363,21 @@ class ConditionalGAN(Model):
         super().compile(*args, **kwargs)
 
         if use_default:
-            self.g_opt = Adam(learning_rate=0.0002, beta_1=0.5)
-            self.d_opt = Adam(learning_rate=0.0002, beta_1=0.5)
+            initial_learning_rate = 0.001
+            g_lr = tf.keras.optimizers.schedules.ExponentialDecay(
+                initial_learning_rate,
+                decay_steps=100000,
+                decay_rate=0.96,
+                staircase=True
+            )
+            d_lr = tf.keras.optimizers.schedules.ExponentialDecay(
+                initial_learning_rate,
+                decay_steps=100000,
+                decay_rate=0.96,
+                staircase=True
+            )
+            self.g_opt = Adam(learning_rate=g_lr)
+            self.d_opt = Adam(learning_rate=d_lr)
             self.g_loss = BinaryCrossentropy()
             self.d_loss = BinaryCrossentropy()
         else:
@@ -400,8 +413,8 @@ class ConditionalGAN(Model):
         )
 
         # Add random noise to the labels - important trick!
-        noise_real = 0.15 * tf.random.uniform(shape=(batch_size, 1))
-        noise_fake = -0.15 * tf.random.uniform(shape=(batch_size, 1))
+        noise_real = 0.1 * tf.random.uniform(shape=(batch_size, 1))
+        noise_fake = -0.1 * tf.random.uniform(shape=(batch_size, 1))
         labels_discriminator += tf.concat([noise_fake, noise_real], axis=0)
 
         # Train the discriminator
