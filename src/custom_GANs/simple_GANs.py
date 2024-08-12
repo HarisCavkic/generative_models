@@ -465,9 +465,12 @@ class ConditionalGAN(Model):
         tf.summary.scalar('wasserstein_distance', -d_loss, step=self.g_opt.iterations)
 
         if self.g_iter_counter % 5 == 0:
-            with self.file_writer.as_default():
-                tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
-                                 step=self.g_opt.iterations)
+          print("Saving 5 images after ", self.g_iter_counter, " iterations")
+          with self.file_writer.as_default():
+            tf.summary.image('test_image', tf.random.uniform((1, 28, 28, 3)), step=0)
+          self.file_writer.flush() 
+        else:
+          print("Not saving images in tensorbord for this iteration")
 
         self.g_iter_counter += 1
 
