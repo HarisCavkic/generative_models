@@ -406,8 +406,8 @@ class ConditionalGAN(Model):
                 decay_rate=0.96,
                 staircase=True
             )
-            self.g_opt = Adam(learning_rate=.00004)
-            self.d_opt = Adam(learning_rate=.00003)
+            self.g_opt = Adam(learning_rate=.00001)
+            self.d_opt = Adam(learning_rate=.00005)
             self.g_loss = BinaryCrossentropy()
         else:
             assert all(opt is not None for opt in (g_opt, d_opt, g_loss, d_loss))
