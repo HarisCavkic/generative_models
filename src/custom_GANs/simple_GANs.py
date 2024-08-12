@@ -318,11 +318,11 @@ class ConditionalGenerator(Model):
 
 
 class ConditionalDiscriminator(tf.keras.Model):
-    def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
+    def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int, clip_value: float):
         super(ConditionalDiscriminator, self).__init__()
         self.model = self.build_discriminator(input_shape, nr_classes, clip_value)
 
-    def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
+    def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int, clip_value: float):
         # label part
         in_label = Input(shape=(1,))
         li = Embedding(nr_classes, 50)(in_label)
@@ -362,7 +362,7 @@ class ConditionalDiscriminator(tf.keras.Model):
 
 class ConditionalGAN(Model):
     def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes=None,
-                 clip_value=0.01, nr_critic_training = 5, log_dir = None, *args, **kwargs):
+                 clip_value=0.01, nr_critic_training=5, log_dir=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Create attributes for gen and disc
         assert all(opt is not None for opt in (latent_dim, output_dim, nr_classes))
@@ -377,7 +377,7 @@ class ConditionalGAN(Model):
             log_dir = Path().resolve() / "logs/CGAN"
             if log_dir.exists():
                 clear_dir = input(f"Log dir {log_dir} exists. Clear? Y/N")
-                if clear_dir == "Y" or clear_dir =="y":
+                if clear_dir == "Y" or clear_dir == "y":
                     shutil.rmtree(log_dir)
                 else:
                     print("You did not say Y to clearing the directory. Exiting now!")
@@ -385,11 +385,14 @@ class ConditionalGAN(Model):
             log_dir.mkdir(parents=True, exist_ok=True)
 
         self.log_dir = str(log_dir)
+        self.file_writer = tf.summary.create_file_writer(self.log_dir)
+
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.log_dir, histogram_freq=1)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
-                                                      nr_classes, clip_value) if discriminator is None else discriminator
+                                                      nr_classes,
+                                                      clip_value) if discriminator is None else discriminator
 
     def compile(self, g_opt=None, d_opt=None, g_loss=None, d_loss=None, use_default=True, *args, **kwargs):
         super().compile(*args, **kwargs)
@@ -458,12 +461,13 @@ class ConditionalGAN(Model):
         self.g_opt.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Log additional metrics
-        tf.summary.scalar('generator_loss', g_loss, step= self.g_opt.iterations)
-        tf.summary.scalar('wasserstein_distance', -d_loss, step= self.g_opt.iterations)
+        tf.summary.scalar('generator_loss', g_loss, step=self.g_opt.iterations)
+        tf.summary.scalar('wasserstein_distance', -d_loss, step=self.g_opt.iterations)
 
         if self.g_iter_counter % 5 == 0:
-            tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
-                             step=self.optimizer.iterations)
+            with self.file_writer.as_default():
+                tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
+                                 step=self.g_opt.iterations)
 
         self.g_iter_counter += 1
 
