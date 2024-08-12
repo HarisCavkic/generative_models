@@ -38,14 +38,13 @@ class ModelMonitor(Callback):
         inputs = [func() for func in self.input_generators]
 
         generated_images = self.model.generator(*inputs)
-        generated_images *= 255
         generated_images.numpy()
 
         print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
-            label = f'l{int(inputs[1][i])}' if len(inputs[1]) > 1 else ""
-            img.save(str(self.save_dir / f'generated_img_e{epoch}_{label}_{i}.png'))
+            label = f'l{int(inputs[1][i])}_' if len(inputs) > 1 else ""
+            img.save(str(self.save_dir / f'generated_img_e{epoch}_{label}{i}.png'))
 
 
 class CheckpointCleanupCallback(Callback):
