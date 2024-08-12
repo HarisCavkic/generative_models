@@ -320,7 +320,7 @@ class ConditionalGenerator(Model):
 class ConditionalDiscriminator(tf.keras.Model):
     def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
         super(ConditionalDiscriminator, self).__init__()
-        self.model = self.build_discriminator(input_shape, nr_classes)
+        self.model = self.build_discriminator(input_shape, nr_classes, clip_value)
 
     def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
         # label part
@@ -338,19 +338,19 @@ class ConditionalDiscriminator(tf.keras.Model):
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2),
-                    kernel_constraint=ClipConstraint(self.clip_value))(merge)
+                    kernel_constraint=ClipConstraint(clip_value))(merge)
         fe = BatchNormalization()(fe)
 
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2),
-                    kernel_constraint=ClipConstraint(self.clip_value))(fe)
+                    kernel_constraint=ClipConstraint(clip_value))(fe)
         fe = BatchNormalization()(fe)
 
         fe = Flatten()(fe)
 
         # use Wasserstein version
-        out_layer = Dense(1, kernel_constraint=ClipConstraint(self.clip_value))(fe)
+        out_layer = Dense(1, kernel_constraint=ClipConstraint(clip_value))(fe)
 
         model = Model([in_image, in_label], out_layer)
 
