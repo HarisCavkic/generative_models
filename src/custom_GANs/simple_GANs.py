@@ -373,7 +373,7 @@ class ConditionalGAN(Model):
         self.nr_critic_training = nr_critic_training
         self.d_iter_counter = 0
         self.g_iter_counter = 0
-
+        self.nr_classes = nr_classes
         if log_dir is None:
             log_dir = Path().resolve() / "logs/CGAN"
             if log_dir.exists():
