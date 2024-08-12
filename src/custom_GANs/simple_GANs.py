@@ -439,7 +439,7 @@ class ConditionalGAN(Model):
 
             grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
             self.d_opt.apply_gradients(zip(grads, self.discriminator.trainable_weights))
-            tf.summary.scalar(f'critic_loss_{i}', d_loss, step=self.self.d_opt.iterations)
+            tf.summary.scalar(f'critic_loss_{i}', d_loss, step=self.d_opt.iterations)
 
         # Freeze the discriminator
         self.generator.trainable = True
@@ -459,7 +459,7 @@ class ConditionalGAN(Model):
         tf.summary.scalar('generator_loss', g_loss, step= self.g_opt.iterations)
         tf.summary.scalar('wasserstein_distance', -d_loss, step= self.g_opt.iterations)
 
-        if self.g_opt.iterations % 5 == 0:
+        if tf.equal(self.g_opt.iterations % 5, 0):
             tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
                              step=self.optimizer.iterations)
 
