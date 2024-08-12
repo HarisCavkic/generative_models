@@ -370,6 +370,8 @@ class ConditionalGAN(Model):
         self.output_dim = output_dim
         self.clip_value = clip_value
         self.nr_critic_training = nr_critic_training
+        self.d_iter_counter = 0
+        self.g_iter_counter = 0
 
         if log_dir is None:
             log_dir = Path().resolve() / "logs/CGAN"
@@ -459,9 +461,11 @@ class ConditionalGAN(Model):
         tf.summary.scalar('generator_loss', g_loss, step= self.g_opt.iterations)
         tf.summary.scalar('wasserstein_distance', -d_loss, step= self.g_opt.iterations)
 
-        if tf.equal(self.g_opt.iterations % 5, 0):
+        if self.g_iter_counter % 5 == 0:
             tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
                              step=self.optimizer.iterations)
+
+        self.g_iter_counter += 1
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
