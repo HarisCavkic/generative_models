@@ -328,12 +328,12 @@ class ConditionalDiscriminator(tf.keras.Model):
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(merge)
-        fe = BatchNormalization(fe)
+        fe = BatchNormalization()(fe)
 
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(fe)
-        fe = BatchNormalization(fe)
+        fe = BatchNormalization()(fe)
 
         fe = Flatten()(fe)
 
