@@ -4,6 +4,7 @@ import re
 import glob
 from typing import Tuple
 import shutil
+import io
 
 import tensorflow as tf
 from keras import Sequential
@@ -464,17 +465,46 @@ class ConditionalGAN(Model):
         tf.summary.scalar('generator_loss', g_loss, step=self.g_opt.iterations)
         tf.summary.scalar('wasserstein_distance', -d_loss, step=self.g_opt.iterations)
 
-        if self.g_iter_counter % 5 == 0:
-          print("Saving 5 images after ", self.g_iter_counter, " iterations")
-          with self.file_writer.as_default():
-            tf.summary.image('test_image', tf.random.uniform((1, 28, 28, 3)), step=0)
-          self.file_writer.flush() 
-        else:
-          print("Not saving images in tensorbord for this iteration")
+        self.log_generated_images(self.g_iter_counter)
+
+        """if self.g_iter_counter % 5 == 0:
+            with self.file_writer.as_default():
+                tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
+                                 step=self.g_opt.iterations)"""
 
         self.g_iter_counter += 1
 
         return {"d_loss": d_loss, "g_loss": g_loss}
+
+    def log_generated_images(self, epoch):
+        if epoch % 5 == 0:
+            num_examples = 5
+            random_latent_vectors = tf.random.normal(shape=(num_examples, self.latent_dim))
+            random_labels = tf.random.uniform(shape=(num_examples,), minval=0, maxval=self.nr_classes, dtype=tf.int32)
+            generated_images = self.generator(random_latent_vectors, random_labels)
+
+            # Convert labels to strings
+            label_strings = [f"Class {label.numpy()}" for label in random_labels]
+
+            # Create a figure with subplots
+            fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
+            for i, (img, label) in enumerate(zip(generated_images, label_strings)):
+                axes[i].imshow(img[:, :, 0], cmap='gray')  # Assuming grayscale images
+                axes[i].set_title(label)
+                axes[i].axis('off')
+
+            # Convert plot to image
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            image = tf.image.decode_png(buf.getvalue(), channels=4)
+            image = tf.expand_dims(image, 0)
+
+            # Log the image to TensorBoard
+            with self.file_writer.as_default():
+                tf.summary.image("Generated Images", image, step=epoch)
+
+            plt.close(fig)
 
     def load_latest_checkpoint(self, checkpoint_dir):
         checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'vanilla_gan_epoch_*.keras'))
