@@ -326,12 +326,12 @@ class ConditionalDiscriminator(tf.keras.Model):
         merge = Concatenate()([in_image, li])
 
         # downsample
-        fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
+        fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(merge)
         fe = Dropout(0.4)(fe)
 
         # downsample
-        fe = Conv2D(128, (3, 3), strides=(2, 2), padding='same',
+        fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
                     activation=LeakyReLU(alpha=0.2))(fe)
         fe = Dropout(0.4)(fe)
 
@@ -376,8 +376,8 @@ class ConditionalGAN(Model):
                 decay_rate=0.96,
                 staircase=True
             )
-            self.g_opt = Adam(learning_rate=g_lr)
-            self.d_opt = Adam(learning_rate=d_lr)
+            self.g_opt = Adam(learning_rate=.00004)
+            self.d_opt = Adam(learning_rate=.00003)
             self.g_loss = BinaryCrossentropy()
             self.d_loss = BinaryCrossentropy()
         else:
