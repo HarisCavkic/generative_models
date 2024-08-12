@@ -12,7 +12,9 @@ from tensorflow.keras.preprocessing.image import array_to_img
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.layers import Conv2D, Dense, Flatten, Reshape, LeakyReLU, Dropout, UpSampling2D, Input, Embedding, \
     Concatenate, Conv2DTranspose, BatchNormalization
+from tensorflow.keras.constraints import Constraint
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras import backend as K
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -38,7 +40,7 @@ class ModelMonitor(Callback):
         generated_images = self.model.generator(*inputs)
         generated_images *= 255
         generated_images.numpy()
- 
+
         print("ModelMonitor: Saving image to ", self.save_dir)
         for i in range(self.num_img):
             img = array_to_img(generated_images[i])
@@ -109,6 +111,14 @@ class GANCheckpoint(tf.keras.callbacks.Callback):
             discriminator_path = os.path.join(self.checkpoint_dir,
                                               f'discriminator_epoch_{epoch + 1:02d}_{self.monitor}_{current:.2f}.keras')
             self.model.discriminator.save(discriminator_path)
+
+
+class ClipConstraint(Constraint):
+    def __init__(self, clip_value):
+        self.clip_value = clip_value
+
+    def __call__(self, weights):
+        return K.clip(weights, -self.clip_value, self.clip_value)
 
 
 class Generator(Model):
@@ -308,11 +318,11 @@ class ConditionalGenerator(Model):
 
 
 class ConditionalDiscriminator(tf.keras.Model):
-    def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int):
+    def __init__(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
         super(ConditionalDiscriminator, self).__init__()
         self.model = self.build_discriminator(input_shape, nr_classes)
 
-    def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int):
+    def build_discriminator(self, input_shape: Tuple[int, int, int], nr_classes: int,  clip_value: float):
         # label part
         in_label = Input(shape=(1,))
         li = Embedding(nr_classes, 50)(in_label)
@@ -327,17 +337,20 @@ class ConditionalDiscriminator(tf.keras.Model):
 
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
-                    activation=LeakyReLU(alpha=0.2))(merge)
+                    activation=LeakyReLU(alpha=0.2),
+                    kernel_constraint=ClipConstraint(self.clip_value))(merge)
         fe = BatchNormalization()(fe)
 
         # downsample
         fe = Conv2D(32, (3, 3), strides=(2, 2), padding='same',
-                    activation=LeakyReLU(alpha=0.2))(fe)
+                    activation=LeakyReLU(alpha=0.2),
+                    kernel_constraint=ClipConstraint(self.clip_value))(fe)
         fe = BatchNormalization()(fe)
 
         fe = Flatten()(fe)
 
-        out_layer = Dense(1, activation='sigmoid')(fe)
+        # use Wasserstein version
+        out_layer = Dense(1, kernel_constraint=ClipConstraint(self.clip_value))(fe)
 
         model = Model([in_image, in_label], out_layer)
 
@@ -348,16 +361,18 @@ class ConditionalDiscriminator(tf.keras.Model):
 
 
 class ConditionalGAN(Model):
-    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes=None, *args,
-                 **kwargs):
+    def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes=None,
+                 clip_value=0.01, nr_critic_training = 5, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Create attributes for gen and disc
         assert all(opt is not None for opt in (latent_dim, output_dim, nr_classes))
         self.latent_dim = latent_dim
         self.output_dim = output_dim
+        self.clip_value = clip_value
+        self.nr_critic_training = nr_critic_training
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
-                                                      nr_classes) if discriminator is None else discriminator
+                                                      nr_classes, clip_value) if discriminator is None else discriminator
 
     def compile(self, g_opt=None, d_opt=None, g_loss=None, d_loss=None, use_default=True, *args, **kwargs):
         super().compile(*args, **kwargs)
@@ -395,52 +410,38 @@ class ConditionalGAN(Model):
         self.generator.trainable = False
         self.discriminator.trainable = True
 
-        # Generate random noise
-        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
+        for _ in range(self.nr_critic_training):  # Train critic more times
+            # Generate random noise
+            random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
-        # Generate fake images
-        generated_images = self.generator(random_latent_vectors, labels)
+            # Generate fake images
+            generated_images = self.generator(random_latent_vectors, labels)
 
-        # Combine real and fake images
-        combined_images = tf.concat([generated_images, real_images], axis=0)
+            with tf.GradientTape() as tape:
+                real_output = self.discriminator(real_images, labels)
+                fake_output = self.discriminator(generated_images, labels)
 
-        # Combine labels for real and fake images
-        combined_labels = tf.concat([labels, labels], axis=0)
+                # Wasserstein loss
+                d_loss = tf.reduce_mean(fake_output) - tf.reduce_mean(real_output)
 
-        # Assemble labels discriminating real from fake images
-        labels_discriminator = tf.concat(
-            [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
-        )
+            grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
+            self.d_opt.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
-        # Add random noise to the labels - important trick!
-        noise_real = 0.1 * tf.random.uniform(shape=(batch_size, 1))
-        noise_fake = -0.1 * tf.random.uniform(shape=(batch_size, 1))
-        labels_discriminator += tf.concat([noise_fake, noise_real], axis=0)
-
-        # Train the discriminator
-        with tf.GradientTape() as tape:
-            predictions = self.discriminator(combined_images, combined_labels)
-            d_loss = self.d_loss(labels_discriminator, predictions)
-        grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
-        self.d_opt.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
         # Freeze the discriminator
         self.generator.trainable = True
         self.discriminator.trainable = False
-
-        # Sample random points in the latent space
-        random_latent_vectors = tf.random.normal(shape=(batch_size*2, self.latent_dim))
-        combined_labels = tf.concat([labels, labels], axis=0)
-        # Assemble labels that say "all real images"
-        misleading_labels = tf.zeros((batch_size*2, 1))
-
         # Train the generator
+        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
+
         with tf.GradientTape() as tape:
-            fake_images = self.generator(random_latent_vectors, combined_labels)
-            predictions = self.discriminator(fake_images, combined_labels)
-            g_loss = self.g_loss(misleading_labels, predictions)
+            generated_images = self.generator(random_latent_vectors, labels)
+            fake_output = self.discriminator(generated_images, labels)
+            g_loss = -tf.reduce_mean(fake_output)
+
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_opt.apply_gradients(zip(grads, self.generator.trainable_weights))
+
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
