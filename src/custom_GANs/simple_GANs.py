@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 import glob
 from typing import Tuple
+import shutil
 
 import tensorflow as tf
 from keras import Sequential
@@ -361,7 +362,7 @@ class ConditionalDiscriminator(tf.keras.Model):
 
 class ConditionalGAN(Model):
     def __init__(self, generator=None, discriminator=None, latent_dim=None, output_dim=None, nr_classes=None,
-                 clip_value=0.01, nr_critic_training = 5, *args, **kwargs):
+                 clip_value=0.01, nr_critic_training = 5, log_dir = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Create attributes for gen and disc
         assert all(opt is not None for opt in (latent_dim, output_dim, nr_classes))
@@ -369,6 +370,21 @@ class ConditionalGAN(Model):
         self.output_dim = output_dim
         self.clip_value = clip_value
         self.nr_critic_training = nr_critic_training
+
+        if log_dir is None:
+            log_dir = Path().resolve() / "logs/CGAN"
+            if log_dir.exists():
+                clear_dir = input(f"Log dir {log_dir} exists. Clear? Y/N")
+                if clear_dir == "Y" or clear_dir =="y":
+                    shutil.rmtree(log_dir)
+                else:
+                    print("You did not say Y to clearing the directory. Exiting now!")
+                    exit()
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+        self.log_dir = str(log_dir)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.log_dir, histogram_freq=1)
+
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
                                                       nr_classes, clip_value) if discriminator is None else discriminator
@@ -393,13 +409,11 @@ class ConditionalGAN(Model):
             self.g_opt = Adam(learning_rate=.00004)
             self.d_opt = Adam(learning_rate=.00003)
             self.g_loss = BinaryCrossentropy()
-            self.d_loss = BinaryCrossentropy()
         else:
             assert all(opt is not None for opt in (g_opt, d_opt, g_loss, d_loss))
             self.g_opt = g_opt
             self.d_opt = d_opt
             self.g_loss = g_loss
-            self.d_loss = d_loss
 
     def train_step(self, batch):
         real_images, labels = batch
@@ -409,7 +423,7 @@ class ConditionalGAN(Model):
         self.generator.trainable = False
         self.discriminator.trainable = True
 
-        for _ in range(self.nr_critic_training):  # Train critic more times
+        for i in range(self.nr_critic_training):  # Train critic more times
             # Generate random noise
             random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
@@ -425,7 +439,7 @@ class ConditionalGAN(Model):
 
             grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
             self.d_opt.apply_gradients(zip(grads, self.discriminator.trainable_weights))
-
+            tf.summary.scalar(f'critic_loss_{i}', d_loss, step=self.self.d_opt.iterations)
 
         # Freeze the discriminator
         self.generator.trainable = True
@@ -441,6 +455,13 @@ class ConditionalGAN(Model):
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_opt.apply_gradients(zip(grads, self.generator.trainable_weights))
 
+        # Log additional metrics
+        tf.summary.scalar('generator_loss', g_loss, step= self.g_opt.iterations)
+        tf.summary.scalar('wasserstein_distance', -d_loss, step= self.g_opt.iterations)
+
+        if self.g_opt.iterations % 5 == 0:
+            tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
+                             step=self.optimizer.iterations)
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
