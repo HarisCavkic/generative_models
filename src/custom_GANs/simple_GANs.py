@@ -495,7 +495,7 @@ class ConditionalGAN(Model):
 
     def _plot_images(self, images, labels, num_examples):
         num_examples = int(num_examples)
-        fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
+        fig, axes = plt.subplots(1, num_examples, figsize=(15, 15))
 
         for i in range(num_examples):
             axes[i].imshow(images[i, :, :, 0].numpy(), cmap='gray')  # Assuming grayscale images
