@@ -487,9 +487,7 @@ class ConditionalGAN(Model):
             height = width = 1080
             image = tf.py_function(self._plot_images, [generated_images, random_labels, num_examples], Tout=[tf.uint8])
 
-            # Remove the extra dimension and ensure the shape
-            image = tf.squeeze(image, axis=0)
-            image = tf.ensure_shape(image, (height, width, 4))
+            image = tf.ensure_shape(image, (1, height, width, 4))
 
             # Log the image to TensorBoard
             with self.file_writer.as_default():
