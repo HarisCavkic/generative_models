@@ -483,27 +483,30 @@ class ConditionalGAN(Model):
             random_labels = tf.random.uniform(shape=(num_examples,), minval=0, maxval=self.nr_classes, dtype=tf.int32)
             generated_images = self.generator(random_latent_vectors, random_labels)
 
-            # Convert labels to strings
-            label_strings = [f"Class {label.numpy()}" for label in random_labels]
-
             # Create a figure with subplots
             fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
-            for i, (img, label) in enumerate(zip(generated_images, label_strings)):
-                axes[i].imshow(img[:, :, 0], cmap='gray')  # Assuming grayscale images
-                axes[i].set_title(label)
-                axes[i].axis('off')
+            
+            # Use tf.py_function to handle numpy operations
+            def plot_images(images, labels):
+                for i in range(num_examples):
+                    axes[i].imshow(images[i, :, :, 0].numpy(), cmap='gray')  # Assuming grayscale images
+                    axes[i].set_title(f"Class {labels[i].numpy()}")
+                    axes[i].axis('off')
+                
+                # Convert plot to image
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png')
+                buf.seek(0)
+                image = tf.image.decode_png(buf.getvalue(), channels=4)
+                image = tf.expand_dims(image, 0)
+                return image
 
-            # Convert plot to image
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png')
-            buf.seek(0)
-            image = tf.image.decode_png(buf.getvalue(), channels=4)
-            image = tf.expand_dims(image, 0)
-
+            image = tf.py_function(plot_images, [generated_images, random_labels], Tout=tf.uint8)
+            
             # Log the image to TensorBoard
             with self.file_writer.as_default():
                 tf.summary.image("Generated Images", image, step=epoch)
-
+            
             plt.close(fig)
 
     def load_latest_checkpoint(self, checkpoint_dir):
