@@ -484,56 +484,34 @@ class ConditionalGAN(Model):
             generated_images = self.generator(random_latent_vectors, random_labels)
 
             # Use tf.py_function to handle numpy operations
-            height = width = 1080
+            height = 1500
+            width = 300
             image = tf.py_function(self._plot_images, [generated_images, random_labels, num_examples], Tout=[tf.uint8])
 
-            image = tf.ensure_shape(image, (1, height, width, 4))
+            image = tf.ensure_shape(image, (1, width, height, 4))
 
             # Log the image to TensorBoard
             with self.file_writer.as_default():
                 tf.summary.image("Generated Images", image, step=epoch)
 
     def _plot_images(self, images, labels, num_examples):
-        # Convert num_examples to a Python integer
-        num_examples = int(num_examples.numpy())
-
-        # Adjust figure size to maintain aspect ratio
+        num_examples = int(num_examples)
         fig, axes = plt.subplots(1, num_examples, figsize=(num_examples * 3, 3))
-
-        # Ensure axes is always a numpy array, even for num_examples = 1
-        axes = np.atleast_1d(axes)
 
         for i in range(num_examples):
             axes[i].imshow(images[i, :, :, 0].numpy(), cmap='gray')  # Assuming grayscale images
             axes[i].set_title(f"Class {labels[i].numpy()}")
             axes[i].axis('off')
 
-        # Adjust subplot spacing
-        plt.tight_layout()
-
         # Convert plot to image
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', pad_inches=0.1)
+        plt.savefig(buf, format='png', dpi=72, bbox_inches='tight')
         plt.close(fig)
         buf.seek(0)
 
         image = tf.image.decode_png(buf.getvalue(), channels=4)
-
-        # Resize while maintaining aspect ratio
-        original_height = tf.shape(image)[0]
-        original_width = tf.shape(image)[1]
-        aspect_ratio = original_width / original_height
-        new_height = 1080
-        new_width = tf.cast(new_height * aspect_ratio, tf.int32)
-
-        image = tf.image.resize(image, (new_height, new_width))
-
-        # Pad to square if necessary
-        paddings = [[0, 0], [0, 1080 - new_width], [0, 0]]
-        image = tf.pad(image, paddings, mode='constant', constant_values=255)
-
+        image = tf.image.resize(image, (300,1500))
         image = tf.cast(image, tf.uint8)
-        image = tf.expand_dims(image, 0)  # Add batch dimension
         return image
 
 
