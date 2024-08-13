@@ -483,31 +483,35 @@ class ConditionalGAN(Model):
             random_labels = tf.random.uniform(shape=(num_examples,), minval=0, maxval=self.nr_classes, dtype=tf.int32)
             generated_images = self.generator(random_latent_vectors, random_labels)
 
-            # Create a figure with subplots
-            fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
-            
             # Use tf.py_function to handle numpy operations
-            def plot_images(images, labels):
-                for i in range(num_examples):
-                    axes[i].imshow(images[i, :, :, 0].numpy(), cmap='gray')  # Assuming grayscale images
-                    axes[i].set_title(f"Class {labels[i].numpy()}")
-                    axes[i].axis('off')
-                
-                # Convert plot to image
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png')
-                buf.seek(0)
-                image = tf.image.decode_png(buf.getvalue(), channels=4)
-                image = tf.expand_dims(image, 0)
-                return image
+            height = width = 1080
+            image = tf.py_function(self._plot_images, [generated_images, random_labels, num_examples], Tout=[tf.uint8])
+            image = tf.ensure_shape(image, (1, height, width, 4))
 
-            image = tf.py_function(plot_images, [generated_images, random_labels], Tout=tf.uint8)
-            
             # Log the image to TensorBoard
             with self.file_writer.as_default():
                 tf.summary.image("Generated Images", image, step=epoch)
-            
-            plt.close(fig)
+
+    def _plot_images(self, images, labels, num_examples):
+        fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
+
+        for i in range(num_examples):
+            axes[i].imshow(images[i, :, :, 0].numpy(), cmap='gray')  # Assuming grayscale images
+            axes[i].set_title(f"Class {labels[i].numpy()}")
+            axes[i].axis('off')
+
+        # Convert plot to image
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=72, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+
+        image = tf.image.decode_png(buf.getvalue(), channels=4)
+        image = tf.image.resize(image, (1080, 1080))
+        image = tf.cast(image, tf.uint8)
+        image = tf.expand_dims(image, 0)
+        return image
+
 
     def load_latest_checkpoint(self, checkpoint_dir):
         checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'vanilla_gan_epoch_*.keras'))
