@@ -388,8 +388,6 @@ class ConditionalGAN(Model):
         self.log_dir = str(log_dir)
         self.file_writer = tf.summary.create_file_writer(self.log_dir)
 
-        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.log_dir, histogram_freq=1)
-
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
                                                       nr_classes,
@@ -468,16 +466,18 @@ class ConditionalGAN(Model):
         self.log_generated_images(self.g_iter_counter)
 
         """if self.g_iter_counter % 5 == 0:
+            with file_writer.as_default():
+                tf.summary.image("Training data", img, step=self.g_opt.iterations)
             with self.file_writer.as_default():
-                tf.summary.image('generated_images', generated_images * 0.5 + 0.5, max_outputs=5,
-                                 step=self.g_opt.iterations)"""
-
+                tf.summary.image('generated_images', generated_images , max_outputs=5,
+                                 step=self.g_opt.iterations)
+        """
         self.g_iter_counter += 1
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
     def log_generated_images(self, epoch):
-        if epoch % 5 == 0:
+        if True: #epoch % 5 == 0:
             num_examples = 5
             random_latent_vectors = tf.random.normal(shape=(num_examples, self.latent_dim))
             random_labels = tf.random.uniform(shape=(num_examples,), minval=0, maxval=self.nr_classes, dtype=tf.int32)
