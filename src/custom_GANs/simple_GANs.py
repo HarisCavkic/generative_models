@@ -485,14 +485,15 @@ class ConditionalGAN(Model):
 
             # Use tf.py_function to handle numpy operations
             height = width = 1080
-            image = tf.py_function(self._plot_images, [generated_images, random_labels], Tout=[tf.uint8])
+            image = tf.py_function(self._plot_images, [generated_images, random_labels, num_examples], Tout=[tf.uint8])
             image = tf.ensure_shape(image, (1, height, width, 4))
 
             # Log the image to TensorBoard
             with self.file_writer.as_default():
                 tf.summary.image("Generated Images", image, step=epoch)
 
-    def _plot_images(self, images, labels):
+    def _plot_images(self, images, labels, num_examples):
+        num_examples = int(num_examples)
         fig, axes = plt.subplots(1, num_examples, figsize=(15, 3))
 
         for i in range(num_examples):
