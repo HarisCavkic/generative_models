@@ -378,12 +378,12 @@ class ConditionalGAN(Model):
         gpu_devices = tf.config.list_physical_devices(device_type='GPU')
         devices = tf.config.list_physical_devices(device_type=None)
 
-        self.cpu_device_name = '/device:CPU:0'
+        self.cpu_device_name = '/CPU:0'
         # Determine the appropriate device name
         if len(gpu_devices) > 0:
-            self.device_name = '/device:GPU:0'
+            self.device_name = '/GPU:0'
         else:
-            self.device_name = '/device:CPU:0'
+            self.device_name = '/CPU:0'
         print(f"Using device: {self.device_name}")
 
         if log_dir is None:
