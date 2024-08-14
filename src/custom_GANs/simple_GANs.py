@@ -399,9 +399,7 @@ class ConditionalGAN(Model):
 
 
 
-        with tf.device(self.device_name):
-            self.log_dir = tf.constant(str(log_dir), dtype=tf.string)
-            self.file_writer = tf.summary.create_file_writer(self.log_dir)
+        self.log_dir = str(log_dir)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
@@ -435,6 +433,9 @@ class ConditionalGAN(Model):
             self.g_loss = g_loss
 
     def train_step(self, batch):
+
+        self.file_writer = tf.summary.create_file_writer(self.log_dir)
+
         real_images, labels = batch
         batch_size = tf.shape(real_images)[0]
 
@@ -506,9 +507,8 @@ class ConditionalGAN(Model):
             image = tf.ensure_shape(image, (1, width, height, 4))
 
             # Log the image to TensorBoard
-            with tf.device(self.cpu_device_name):
-                with self.file_writer.as_default():
-                    tf.summary.image("Generated Images", image, step=epoch)
+            with tf.summary.record_if(True):
+                tf.summary.image("Generated Images", image, step=epoch)
 
     def _plot_images(self, images, labels, num_examples):
         num_examples = int(num_examples)
