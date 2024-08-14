@@ -402,6 +402,7 @@ class ConditionalGAN(Model):
             self.log_dir = tf.constant(str(log_dir), dtype=tf.string)
             print("Logdir on device: ",  self.log_dir.device)
             self.file_writer = tf.summary.create_file_writer(self.log_dir)
+            print("Writer on device: ", self.file_writer.device)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
