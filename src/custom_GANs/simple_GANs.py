@@ -399,7 +399,7 @@ class ConditionalGAN(Model):
 
 
         with tf.device(self.device_name):
-            self.log_dir = str(log_dir)
+            self.log_dir = tf.constant(str(log_dir), dtype=tf.string)
             self.file_writer = tf.summary.create_file_writer(self.log_dir)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
