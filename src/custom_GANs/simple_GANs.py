@@ -374,6 +374,16 @@ class ConditionalGAN(Model):
         self.d_iter_counter = 0
         self.g_iter_counter = 0
         self.nr_classes = nr_classes
+
+        gpu_devices = tf.config.list_physical_devices(
+            device_type='GPU'
+        )
+        devices = tf.config.list_physical_devices(
+            device_type=None
+        )
+        self.device_name = gpu_devices[0].name if len(gpu_devices) > 0 else devices[0].name
+        print(f"Using device: {self.device_name}")
+
         if log_dir is None:
             log_dir = Path().resolve() / "logs/CGAN"
             if log_dir.exists():
@@ -386,7 +396,8 @@ class ConditionalGAN(Model):
             log_dir.mkdir(parents=True, exist_ok=True)
 
         self.log_dir = str(log_dir)
-        self.file_writer = tf.summary.create_file_writer(self.log_dir)
+        with tf.device(self.device_name):
+            self.file_writer = tf.summary.create_file_writer(self.log_dir)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
