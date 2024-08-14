@@ -400,9 +400,7 @@ class ConditionalGAN(Model):
 
         with tf.device(self.device_name):
             self.log_dir = tf.constant(str(log_dir), dtype=tf.string)
-            print("Logdir on device: ",  self.log_dir.device)
             self.file_writer = tf.summary.create_file_writer(self.log_dir)
-            print("Writer on device: ", self.file_writer.device)
 
         self.generator = ConditionalGenerator(latent_dim, nr_classes, output_dim) if generator is None else generator
         self.discriminator = ConditionalDiscriminator(output_dim,
@@ -507,8 +505,9 @@ class ConditionalGAN(Model):
             image = tf.ensure_shape(image, (1, width, height, 4))
 
             # Log the image to TensorBoard
-            with self.file_writer.as_default():
-                tf.summary.image("Generated Images", image, step=epoch)
+            with tf.device(self.device_name):
+                with self.file_writer.as_default():
+                    tf.summary.image("Generated Images", image, step=epoch)
 
     def _plot_images(self, images, labels, num_examples):
         num_examples = int(num_examples)
