@@ -378,6 +378,7 @@ class ConditionalGAN(Model):
         gpu_devices = tf.config.list_physical_devices(device_type='GPU')
         devices = tf.config.list_physical_devices(device_type=None)
 
+        self.cpu_device_name = '/device:CPU:0'
         # Determine the appropriate device name
         if len(gpu_devices) > 0:
             self.device_name = '/device:GPU:0'
@@ -505,7 +506,7 @@ class ConditionalGAN(Model):
             image = tf.ensure_shape(image, (1, width, height, 4))
 
             # Log the image to TensorBoard
-            with tf.device(self.device_name):
+            with tf.device(self.cpu_device_name):
                 with self.file_writer.as_default():
                     tf.summary.image("Generated Images", image, step=epoch)
 
